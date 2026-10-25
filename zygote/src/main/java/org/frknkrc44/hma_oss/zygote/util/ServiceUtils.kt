@@ -5,6 +5,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.Build
+import android.os.SystemClock
 import android.os.IBinder
 import android.os.RemoteException
 import android.os.ServiceManager
@@ -25,10 +26,19 @@ import org.frknkrc44.hma_oss.zygote.util.Logcat.logV
 import org.frknkrc44.hma_oss.zygote.util.ZLUtils.callMethod
 import org.frknkrc44.hma_oss.zygote.util.ZLUtils.findField
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 object ServiceUtils {
     private const val TAG = "ServiceUtils"
     private val fileFlags = OsConstants.R_OK or OsConstants.W_OK
+
+    // uid -> packages cache. PackageManagerService's per-query hook used to do a
+    // synchronous getPackagesForUid() binder call for every query, even when the
+    // result was identical; that showed up as a measurable PM query latency delta.
+    private const val CALLING_APPS_TTL_MS = 5_000L
+    private const val CALLING_APPS_CACHE_MAX = 256
+    private class CallingAppsEntry(val at: Long, val apps: Array<String>)
+    private val callingAppsCache = ConcurrentHashMap<Int, CallingAppsEntry>()
 
     @Throws(InterruptedException::class)
     fun waitForService(name: String?): IBinder? {
@@ -67,9 +77,19 @@ object ServiceUtils {
 
     fun getCallingApps(pms: IPackageManager, callingUid: Int): Array<String> {
         if (callingUid == Constants.UID_SYSTEM) return arrayOf()
-        return binderLocalScope {
+
+        val now = SystemClock.elapsedRealtime()
+        callingAppsCache[callingUid]?.let {
+            if (now - it.at < CALLING_APPS_TTL_MS) return it.apps
+        }
+
+        val apps = binderLocalScope {
             pms.getPackagesForUid(callingUid)
         } ?: arrayOf()
+
+        if (callingAppsCache.size >= CALLING_APPS_CACHE_MAX) callingAppsCache.clear()
+        callingAppsCache[callingUid] = CallingAppsEntry(now, apps)
+        return apps
     }
 
     fun findAndVerifyAppSignature(pms: IPackageManager): Int {
