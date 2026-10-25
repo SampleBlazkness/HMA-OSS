@@ -3,6 +3,7 @@ package org.frknkrc44.hma_oss.zygote.hook
 import android.content.pm.IPackageManager
 import icu.nullptr.hidemyapplist.common.Constants
 import icu.nullptr.hidemyapplist.common.Utils.getUserFromCallingUid
+import org.frknkrc44.hma_oss.zygote.service.AppsFilterCache
 import org.frknkrc44.hma_oss.zygote.service.ReturnValue
 import org.frknkrc44.hma_oss.zygote.util.Logcat.logD
 import org.frknkrc44.hma_oss.zygote.util.Logcat.logI
@@ -26,6 +27,9 @@ abstract class PmsHookTargetBase : IFrameworkHook {
 
         val callingUid = findCallingUid()
         if (callingUid == null || callingUid == Constants.UID_SYSTEM) return
+        // When the framework's own AppsFilter cache carries our hide pairs the
+        // per-query hooks are pure overhead (and measurably slower).
+        if (AppsFilterCache.active) return
 
         val targetApp = findTargetApp() ?: return
         logV(TAG) { "@$methodName incoming query: $callingUid => $targetApp" }

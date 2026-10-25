@@ -6,12 +6,14 @@ import androidx.annotation.RequiresApi
 import icu.nullptr.hidemyapplist.common.CollectionUtils.firstOrNullWithType
 import icu.nullptr.hidemyapplist.common.OSUtils
 import icu.nullptr.hidemyapplist.common.Utils
+import org.frknkrc44.hma_oss.zygote.service.AppsFilterCache
 import org.frknkrc44.hma_oss.zygote.util.Logcat.logI
 import org.frknkrc44.hma_oss.zygote.util.ServiceUtils.getCallingApps
 import org.frknkrc44.hma_oss.zygote.util.ServiceUtils.getPackageNameFromPackageSettings
 import org.frknkrc44.hma_oss.zygote.util.ZLUtils.args
 import org.frknkrc44.hma_oss.zygote.util.ZLUtils.findMethod
 import org.frknkrc44.hma_oss.zygote.util.ZLUtils.getArgument
+import org.frknkrc44.hma_oss.zygote.util.ZLUtils.thisObject
 import org.frknkrc44.hma_oss.zygote.util.ZygoteConstants.APPS_FILTER_IMPL_CLASS
 import org.frknkrc44.hma_oss.zygote.util.ZygoteConstants.COMPUTER_ENGINE_CLASS
 
@@ -97,6 +99,7 @@ open class PmsHookTarget33 : PmsHookTargetBase() {
                 APPS_FILTER_IMPL_CLASS,
                 "shouldFilterApplication",
             ) { methodName, frame, returnValue ->
+                AppsFilterCache.attach(frame.thisObject)
                 applyPackageHiding(
                     methodName,
                     returnValue,
@@ -109,6 +112,15 @@ open class PmsHookTarget33 : PmsHookTargetBase() {
                     },
                     true,
                 )
+            }
+
+            // The framework rebuilds parts of the visibility matrix on package
+            // changes; re-apply our pairs afterwards instead of hooking queries.
+            hookAfter(
+                APPS_FILTER_IMPL_CLASS,
+                "updateShouldFilterCacheForPackage",
+            ) { _, _, _ ->
+                AppsFilterCache.schedule(service)
             }
         }
     }

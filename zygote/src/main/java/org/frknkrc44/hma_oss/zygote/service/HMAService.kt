@@ -237,6 +237,7 @@ class HMAService(val pms: IPackageManager, val pmn: Any?) : IHMAService.Stub() {
         if (config != loading) {
             loading.cleanRemnantsFromConfig()
             config = loading
+            AppsFilterCache.schedule(this)
         }
 
         logI(TAG) { "Config loaded" }
@@ -519,6 +520,7 @@ class HMAService(val pms: IPackageManager, val pmn: Any?) : IHMAService.Stub() {
                 ensureFileIsRW(configFile, true)
                 configFile.writeText(json)
                 dataHolder.clearUidCache()
+                AppsFilterCache.schedule(this)
 
                 // remove filter counts for apps if they are not in config
                 dataHolder.filterHolder
@@ -812,6 +814,7 @@ class HMAService(val pms: IPackageManager, val pmn: Any?) : IHMAService.Stub() {
         }
 
         config = loading
+        AppsFilterCache.schedule(this)
     }
 
     override fun getUserProfiles() = binderLocalScope { UserManagerUtils.userIds }
